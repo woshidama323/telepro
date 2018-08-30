@@ -9,6 +9,7 @@ import asyncio
 #解决一般函数不能用异步的方式的问题
 from multiprocessing import Pool, Queue
 # import queue
+from apscheduler.schedulers.background import BackgroundScheduler
 
 
 #全局变量==== 定时发红包时间
@@ -107,7 +108,7 @@ def gethongbao(bot,query):
                             chat_id=query.message.chat_id,
                             message_id=query.message.message_id)
         else:
-            bot.edit_message_text(  text="hi {},你已抢过红包,已获得{}个CHU币,请3小时后再来".format(query.from_user.first_name,luckyuser['chunum']),
+            bot.edit_message_text(  text="hi {},你已抢过红包,已获得{}个CHU币,请3小时后再来".format(query.from_user.first_name,int(luckyuser['chunum'])),
                         chat_id=query.message.chat_id,
                         message_id=query.message.message_id)       
                         
@@ -222,6 +223,11 @@ def testprint():
             print("put random number into gqueue %s" % i)
             gqueue.put(i)
 
+def dailylucky():
+    client = MongoClient('localhost', 27017)
+    db = client.test_database
+    infoitem = db.posts.update_many({"isregister":True},{'$set':{"isregister":False}})
+    clien.close()
 
 def runtimer():
     print("working on it", file=open("output.txt", "a"))
@@ -229,7 +235,9 @@ def runtimer():
 
 if __name__ == '__main__':
     # queue = Queue()
-
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(dailylucky, 'interval', hours=24,id='my_job_id')
+    scheduler.start()
     with Pool(processes=2) as pool:         # start 4 worker processes
         
         result = pool.apply_async(testprint)
