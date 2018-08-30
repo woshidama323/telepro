@@ -7,16 +7,16 @@ import random
 import asyncio
 
 #解决一般函数不能用异步的方式的问题
-from multiprocessing import Pool
-import queue
+from multiprocessing import Pool, Queue
+# import queue
 
 
 #全局变量==== 定时发红包时间
 LUCKYINTERVAL = 3600*3
 
 #全局队列
-gqueue = queue.Queue()     #红包生成queue
-userqueue = queue.Queue() #本轮已经抢过红包队列
+gqueue = Queue()     #红包生成queue
+# userqueue = queue.Queue() #本轮已经抢过红包队列
 
 #数据库读写
 from pymongo import MongoClient
@@ -72,35 +72,51 @@ def button(bot, update):
         checkin(bot,query)
     elif(query.data == '4'):
         print("chu币排行=================")
-        getthechuinof(bot,query)
+        getthechuinfo(bot,query)
     create(bot,update)
 
 
 
 def gethongbao(bot,query):
 
-    if query.from_user.id in userqueue.queue:
-        bot.edit_message_text(text="hi {}, 你已经抢到过CHU币".format(query.from_user.first_name),
-                chat_id=query.message.chat_id,
-                message_id=query.message.message_id)
-    else:
-        if not gqueue.empty():
-            
+
+    if not gqueue.empty():
+
+        client = MongoClient('localhost', 27017)
+        db = client.test_database
+        
+        luckyuser = db.posts.find_one({'userid':query.from_user.id})
+        luckychu = gqueue.get()
+
+        if luckyuser is None:
             print("hi {}, you are getting the locky money".format(query.from_user.first_name))
-            luckychu = gqueue.get()
-            client = MongoClient('localhost', 27017)
-            db = client.test_database
-            db.posts.insert_one({'userid':query.from_user.id,'chunum':luckychu})
-            client.close()
+            db.posts.insert_one({'userid':query.from_user.id,'chunum':luckychu,'isregister':False,'isGetCHU':True})
+
+            bot.edit_message_text(text="hi {}, 你已经抢到过CHU币".format(query.from_user.first_name),
+                    chat_id=query.message.chat_id,
+                    message_id=query.message.message_id)
+
+        elif 'isGetCHU' in luckyuser and luckyuser['isGetCHU'] is False:
+            luckyuser['chunum'] += luckychu
+            luckyuser['isGetCHU'] = True
+            db.posts.replace_one({'userid':query.from_user.id},luckyuser)
+            
             
             print("get the lucky coin : %s for %s " % (luckychu,query))
             bot.edit_message_text(text="hi {}, 抢到{}个CHU币".format(query.from_user.first_name,int(luckychu)),
                             chat_id=query.message.chat_id,
                             message_id=query.message.message_id)
         else:
-            bot.edit_message_text(  text="hi {},当前不是发红包的时间，请3小时后再来".format(query.from_user.first_name),
-                                    chat_id=query.message.chat_id,
-                                    message_id=query.message.message_id)
+            bot.edit_message_text(  text="hi {},你已抢过红包,已获得{}个CHU币,请3小时后再来".format(query.from_user.first_name,luckyuser['chunum']),
+                        chat_id=query.message.chat_id,
+                        message_id=query.message.message_id)       
+                        
+        client.close()
+        
+    else:
+        bot.edit_message_text(  text="hi {},当前不是发红包的时间，请3小时后再来".format(query.from_user.first_name),
+                        chat_id=query.message.chat_id,
+                        message_id=query.message.message_id)
 
 def checkin(bot,query):
     client = MongoClient('localhost', 27017)
@@ -110,23 +126,46 @@ def checkin(bot,query):
     print("useritem is {}".format(useritem))
     if useritem == None:
 
-        db.posts.insert_one({'userid':query.from_user.id,'chunum':20})
+        db.posts.insert_one({'userid':query.from_user.id,'chunum':20,'isregister':True,'isGetCHU':False})
         bot.edit_message_text(  text="hi {},签到成功,已获得20个CHU币".format(query.from_user.first_name),
                                 chat_id=query.message.chat_id,
                                 message_id=query.message.message_id)
 
-    else:
+    elif 'isregister' in useritem and useritem['isregister'] is False:
+
         useritem["chunum"] += 20
+        useritem['isregister'] = True
         
-        db.posts.replace_one({'userid':query.from_user.id},{'userid':query.from_user.id,'chunum':useritem["chunum"]})
+        db.posts.replace_one({'userid':query.from_user.id},useritem)
         bot.edit_message_text(  text="hi {},签到成功,已获得20个CHU币".format(query.from_user.first_name),
+                                chat_id=query.message.chat_id,
+                                message_id=query.message.message_id)
+    else:
+        bot.edit_message_text(  text="hi {},今天已签过到".format(query.from_user.first_name),
                                 chat_id=query.message.chat_id,
                                 message_id=query.message.message_id)
 
     client.close()
     
-def getthechuinof(bot,query):
+def getthechuinfo(bot,query):
+    client = MongoClient('localhost', 27017)
+    db = client.test_database
+    infoitem = db.posts.find_one({'userid':query.from_user.id})
+    
+    if infoitem is None:
+        bot.edit_message_text(  text="hi {},未查到你任何信息，今天可以签到或者抢红包".format(query.from_user.first_name),
+                                chat_id=query.message.chat_id,
+                                message_id=query.message.message_id)
+    elif 'chunum' in infoitem:
+        bot.edit_message_text(  text="hi {},共获得chu币总数为:{}".format(query.from_user.first_name,int(infoitem['chunum'])),
+                                chat_id=query.message.chat_id,
+                                message_id=query.message.message_id)
+    else:
+        bot.edit_message_text(  text="hi {},未能查到任何信息，请与客服联系".format(query.from_user.first_name),
+                                chat_id=query.message.chat_id,
+                                message_id=query.message.message_id)
     print("query is")
+    client.close()
 
 def generate_random_integers(_sum, n):  
     mean = _sum / n
@@ -165,25 +204,23 @@ def timerthread():
     timethreading.start()
 
 def testprint():
-    print("we have no ability to figure something out")
+    print("sending random number to the gqueue")
     import time
     while True:
-        time.sleep(90)
+        time.sleep(60)
 
         rannum = generate_random_integers(500,20)
 
-        with gqueue.mutex:
-            gqueue.clear()
+        client = MongoClient('localhost', 27017)
+        db = client.test_database
+        infoitem = db.posts.update_many({"isGetCHU":True},{'$set':{"isGetCHU":False}})
+        clien.close()
+
+        # with gqueue.mutex:
+        #     gqueue.queue.clear()
         for i in rannum:
             print("put random number into gqueue %s" % i)
             gqueue.put(i)
-    
-        # client = MongoClient('localhost', 27017)
-        # db = client.test_database
-        # print("hello is %s" % db)
-        # db.posts.insert_one({'what':'are your'})
-        
-        print("hello man time ")
 
 
 def runtimer():
@@ -193,7 +230,8 @@ def runtimer():
 if __name__ == '__main__':
     # queue = Queue()
 
-    with Pool(processes=4) as pool:         # start 4 worker processes
+    with Pool(processes=2) as pool:         # start 4 worker processes
+        
         result = pool.apply_async(testprint)
         result = pool.apply(teleupdate) 
          
