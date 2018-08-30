@@ -208,14 +208,14 @@ def testprint():
     print("sending random number to the gqueue")
     import time
     while True:
-        time.sleep(60)
+        time.sleep(LUCKYINTERVAL)
 
         rannum = generate_random_integers(500,20)
 
         client = MongoClient('localhost', 27017)
         db = client.test_database
         infoitem = db.posts.update_many({"isGetCHU":True},{'$set':{"isGetCHU":False}})
-        clien.close()
+        client.close()
 
         # with gqueue.mutex:
         #     gqueue.queue.clear()
@@ -227,20 +227,23 @@ def dailylucky():
     client = MongoClient('localhost', 27017)
     db = client.test_database
     infoitem = db.posts.update_many({"isregister":True},{'$set':{"isregister":False}})
-    clien.close()
+    client.close()
 
 def runtimer():
     print("working on it", file=open("output.txt", "a"))
 
-
+def scheduler():
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(dailylucky, 'interval', hours=24 ,id='my_job_id')
+    scheduler.start()
+    
 if __name__ == '__main__':
     # queue = Queue()
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(dailylucky, 'interval', hours=24,id='my_job_id')
-    scheduler.start()
-    with Pool(processes=2) as pool:         # start 4 worker processes
+
+    with Pool(processes=3) as pool:         # start 4 worker processes
         
         result = pool.apply_async(testprint)
+        result = pool.apply_async(scheduler)
         result = pool.apply(teleupdate) 
          
         
