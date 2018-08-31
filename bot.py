@@ -17,6 +17,7 @@ LUCKYINTERVAL = 3600*3
 
 #全局队列
 gqueue = Queue()     #红包生成queue
+sumqueue = Queue()     #红包生成queue
 # userqueue = queue.Queue() #本轮已经抢过红包队列
 
 #数据库读写
@@ -73,22 +74,32 @@ def button(bot, update):
     elif(query.data == '4'):
         print("chu币排行=================")
         getthechuinfo(bot,query)
-    create(bot,update)
-
+    # create(bot,update)
 
 
 def gethongbao(bot,query):
 
-
     if not gqueue.empty():
 
+        
         client = MongoClient('localhost', 27017)
         db = client.test_database
         
         luckyuser = db.posts.find_one({'userid':query.from_user.id})
-        luckychu = gqueue.get()
+
 
         if luckyuser is None:
+
+            #get the random 
+            luckychu = gqueue.get()
+            sumleft = 0
+            if not sumqueue.empty():
+                sumleft = sumqueue.get()
+                sumleft -=  int(luckychu)
+                sumqueue.put(sumleft)
+
+            logger.info("current the sumleft is {}".format(sumleft))
+            #----------------------------------------------------------
             print("hi {}, you are getting the locky money".format(query.from_user.first_name))
             db.posts.insert_one({'userid':query.from_user.id,'chunum':luckychu,'isregister':False,'isGetCHU':True})
 
@@ -97,6 +108,18 @@ def gethongbao(bot,query):
                     message_id=query.message.message_id)
 
         elif 'isGetCHU' in luckyuser and luckyuser['isGetCHU'] is False:
+
+            #get the random 
+            luckychu = gqueue.get()
+            sumleft = 0
+            if not sumqueue.empty():
+                sumleft = sumqueue.get()
+                sumleft -=  int(luckychu)
+                sumqueue.put(sumleft)
+
+            logger.info("current the sumleft is {}".format(sumleft))
+            #----------------------------------------------------------
+            
             luckyuser['chunum'] += luckychu
             luckyuser['isGetCHU'] = True
             db.posts.replace_one({'userid':query.from_user.id},luckyuser)
@@ -107,7 +130,20 @@ def gethongbao(bot,query):
                             chat_id=query.message.chat_id,
                             message_id=query.message.message_id)
         else:
-            bot.edit_message_text(  text="hi {},你已抢过红包,已获得{}个CHU币,请3小时后再来".format(query.from_user.first_name,int(luckyuser['chunum'])),
+            sum = 0 
+            # listforqueue = []
+            # while gqueue.qsize() != 0:
+                
+            #     logger.info("get the list is {}".format(listforqueue))
+            #     temprandom =  gqueue.get()
+            #     listforqueue.append(temprandom)
+            #     sum += temprandom
+            
+            # logger.info("get the list is {}".format(listforqueue))
+            # for i in listforqueue:
+            #     gqueue.put(i)
+
+            bot.edit_message_text(  text="hi {},你已抢过红包,已获得{}个CHU币,请3小时后再来,目前红包剩余{}/20，剩余CHU币{}个".format(query.from_user.first_name,int(luckyuser['chunum']), gqueue.qsize(), sumleft),
                         chat_id=query.message.chat_id,
                         message_id=query.message.message_id)       
                         
@@ -188,7 +224,7 @@ def generate_random_integers(_sum, n):
 def teleupdate():
     from telegram.ext import MessageHandler,Filters,CommandHandler,CallbackQueryHandler
     echo_handler = MessageHandler(Filters.text,hello)
-    command_handler = CommandHandler("老单",create)
+    command_handler = CommandHandler("CHU币",create)
     dispatcher.add_handler(echo_handler)
     dispatcher.add_handler(command_handler)
     dispatcher.add_handler(CallbackQueryHandler(button))
@@ -207,8 +243,12 @@ def testprint():
     print("sending random number to the gqueue")
     import time
     while True:
-        time.sleep(LUCKYINTERVAL)
+        time.sleep(300)  #LUCKYINTERVAL
 
+        # bot.edit_message_text(  text="hi {},今天已签过到".format(query.from_user.first_name),
+        #                         chat_id=query.message.chat_id,
+        #                         message_id=query.message.message_id)
+                                
         rannum = generate_random_integers(500,20)
 
         client = MongoClient('localhost', 27017)
@@ -216,11 +256,18 @@ def testprint():
         infoitem = db.posts.update_many({"isGetCHU":True},{'$set':{"isGetCHU":False}})
         client.close()
 
-        # with gqueue.mutex:
-        #     gqueue.queue.clear()
+        while not gqueue.empty():
+            gqueue.get()
+
         for i in rannum:
             print("put random number into gqueue %s" % i)
             gqueue.put(i)
+
+
+        while sumqueue.qsize() != 0:
+            sumqueue.get()
+                
+        sumqueue.put(500)
 
 def dailylucky():
     client = MongoClient('localhost', 27017)
