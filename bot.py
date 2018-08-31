@@ -2,14 +2,14 @@
 from telegram.ext import Updater
 from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove,InlineKeyboardMarkup,InlineKeyboardButton)
 import logging
-import random
+import random,time
 
 import asyncio
 
 #解决一般函数不能用异步的方式的问题
 from multiprocessing import Pool, Queue
 # import queue
-from apscheduler.schedulers.background import BackgroundScheduler
+import schedule
 
 
 #全局变量==== 定时发红包时间
@@ -44,8 +44,7 @@ def hello(bot,update):
 def create(bot,update):
     print("hello update %s" % update)
 
-    keyboard = [[InlineKeyboardButton("抢红包", callback_data='1'),
-                 InlineKeyboardButton("发红包", callback_data='2')],
+    keyboard = [[InlineKeyboardButton("抢红包", callback_data='1')],   #,InlineKeyboardButton("发红包", callback_data='2')
 
                 [InlineKeyboardButton("签到", callback_data='3'),
                  InlineKeyboardButton("chu币排行", callback_data='4')]
@@ -64,9 +63,9 @@ def button(bot, update):
         print("抢红包=================")
         print("get the data 1")
         gethongbao(bot,query)
-    elif(query.data == '2'):
-        print("发红包=================")
-        print("get the data 2")
+    # elif(query.data == '2'):
+    #     print("发红包=================")
+    #     print("get the data 2")
         # checkin(bot,query)
     elif(query.data == '3'):
         print("签到=================")
@@ -233,17 +232,23 @@ def runtimer():
     print("working on it", file=open("output.txt", "a"))
 
 def scheduler():
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(dailylucky, 'interval', hours=24 ,id='my_job_id')
-    scheduler.start()
+    schedule.every().day.at("16:00").do(dailylucky)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(60)
+        print("working======")
+
     
 if __name__ == '__main__':
     # queue = Queue()
 
     with Pool(processes=3) as pool:         # start 4 worker processes
         
-        result = pool.apply_async(testprint)
-        result = pool.apply_async(scheduler)
-        result = pool.apply(teleupdate) 
+        result1 = pool.apply_async(testprint)
+        
+        result2 = pool.apply_async(scheduler)
+        
+        result3 = pool.apply(teleupdate) 
          
         
