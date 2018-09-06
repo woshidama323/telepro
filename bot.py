@@ -43,6 +43,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 updater = Updater(token='570841543:AAGnlNIz7eTb-nmJ6QmiZ13cNVsIsGKR1HQ',workers=80)
+bot2 = Updater(token='663658713:AAHncK3JgOLDyyWV_rFRoQ-kfOsqj5S1Wp0',workers=80)
 
 dispatcher = updater.dispatcher
 
@@ -60,7 +61,7 @@ def start(bot,update):
         groupinfoque.put(update.message.chat.id)
 
 def create(bot,update):
-    print("hello update %s" % update)
+    # print("hello update %s" % update)
 
     
     keyboard = [[InlineKeyboardButton("抢红包", callback_data='1')],   #,InlineKeyboardButton("发红包", callback_data='2')
@@ -76,16 +77,20 @@ def create(bot,update):
 
 
     inputstr = update
-    print("hello input something *******  %s type is %s " % (inputstr, type(inputstr)))
+    # print("hello input something *******  %s type is %s " % (inputstr, type(inputstr)))
     update.quetype = "need1"
     
+    logger.info("the delayque size is %s" % delayque.qsize())
+    # if(delayque.qsize() == 20):
+    #     print("string -=-==-=-=-=-=-=- sleep")
+    #     time.sleep(30)
     delayque.put(update)
     logger.info("whether the queue is full {}".format(delayque.full()))
 
     # bot.send_message(chat_id="@harryma507",
     #     text = '需要我做什么？',
     #     reply_markup=InlineKeyboardMarkup(keyboard,one_time_keyboard=True))
-    print("hello output, %s" % update.message)
+    # print("hello output, %s" % update.message)
     # bot.send_message(chat_id='@helloeasy', text = 'my lord')
     
 def button(bot, update):
@@ -162,23 +167,118 @@ def gethongbao(bot,update):
             
             
             print("get the lucky coin : %s for %s " % (luckychu,query))
-            bot.edit_message_text(text="hi {} {}, 抢到{}个CHU币".format(query.from_user.first_name,query.from_user.last_name,int(luckychu)),
-                            chat_id=query.message.chat_id,message_id=query.message.message_id)
-            # bot.send_message(text="hi {} {}, 抢到{}个CHU币".format(query.from_user.first_name,query.from_user.last_name,int(luckychu)),
-            #     chat_id="@helloeasy")
+            
+            try:
+                bot.edit_message_text(text="hi {} {}, 抢到{}个CHU币".format(query.from_user.first_name,query.from_user.last_name,int(luckychu)),
+                                chat_id=query.message.chat_id,message_id=query.message.message_id)
+                # bot.send_message(text="hi {} {}, 抢到{}个CHU币".format(query.from_user.first_name,query.from_user.last_name,int(luckychu)),
+                #     chat_id="@helloeasy")
+            except Exception as e:
+                logger.error(e)
+            
         else:
             logger.info("current the sumleft is {}".format(sumleft))
             gsumleft = sumqueue.get()
-            bot.edit_message_text(  text="hi {} {},你已抢过红包,已获得{}个CHU币,请3小时后再来,目前红包剩余{}/20，剩余CHU币{}个".format(query.from_user.first_name,query.from_user.last_name,int(luckyuser['luckynum']), gqueue.qsize(), gsumleft),
+            try:
+                bot.edit_message_text(  text="hi {} {},你已抢过红包,已获得{}个CHU币,请3小时后再来,目前红包剩余{}/20，剩余CHU币{}个".format(query.from_user.first_name,query.from_user.last_name,int(luckyuser['luckynum']), gqueue.qsize(), gsumleft),
                         chat_id=query.message.chat_id,message_id=query.message.message_id)      
             # bot.send_message(text="hi {} {},你已抢过红包,已获得{}个CHU币,请3小时后再来,目前红包剩余{}/20，剩余CHU币{}个".format(query.from_user.first_name,query.from_user.last_name,int(luckyuser['luckynum']), gqueue.qsize(), gsumleft),
             #     chat_id="@helloeasy") 
+            except Exception as e:
+                logger.error(e)
+                
             sumqueue.put(gsumleft)
         client.close()
         
     else:
         bot.edit_message_text(  text="hi {} {},当前不是发红包的时间，请3小时后再来".format(query.from_user.first_name,query.from_user.last_name),
                         chat_id=query.message.chat_id,message_id=query.message.message_id)
+
+def qianghongbao(bot,update):
+    
+    print("what is the query ============================================ %s" % update.message.from_user)
+    msg = update.message
+    print("*****msg is {} {} ".format(msg.chat_id,msg.message_id))
+
+
+    # return 
+    # query = update.callback_query
+    if not gqueue.empty():
+
+        
+        client = MongoClient('localhost', 27017)
+        db = client.test_database
+        
+        luckyuser = db.posts.find_one({'userid':msg.from_user.id})
+
+        luckychu = 0
+        sumleft = 0
+        if luckyuser is None:
+
+            #get the random 
+            luckychu = gqueue.get()
+            
+            if not sumqueue.empty():
+                sumleft = sumqueue.get()
+                sumleft -=  int(luckychu)
+                sumqueue.put(sumleft)
+
+            #----------------------------------------------------------
+            print("hi {}, you are getting the locky money ".format(msg.from_user.first_name))
+            db.posts.insert_one({'userid':msg.from_user.id,'chunum':luckychu,'luckynum':luckychu,'isregister':False,'isGetCHU':True})
+
+            #用户第一次抢红包，放到队列当中
+            update.quetype = "gethongbao1"
+            # delayque.put(update)             
+
+            
+
+        elif 'isGetCHU' in luckyuser and luckyuser['isGetCHU'] is False:
+
+            #get the random 
+            luckychu = gqueue.get()
+            #left random lucky money
+            if not sumqueue.empty():
+                sumleft = sumqueue.get()
+                sumleft -=  int(luckychu)
+                sumqueue.put(sumleft)
+
+            #----------------------------------------------------------
+
+            luckyuser['chunum'] += luckychu
+            luckyuser['luckynum'] = luckychu
+            luckyuser['isGetCHU'] = True
+            db.posts.replace_one({'userid':msg.from_user.id},luckyuser)
+            
+            
+            print("get the lucky coin : %s for %s " % (luckychu,msg))
+            
+            try:
+      
+                msg.reply_text(text="hi {} {}, 抢到{}个CHU币".format(msg.from_user.first_name,msg.from_user.last_name,int(luckychu)),reply_to_message_id=msg.message_id)
+
+            except Exception as e:
+                logger.error(e)
+            
+        else:
+            logger.info("current the sumleft is {}".format(sumleft))
+            gsumleft = sumqueue.get()
+            try:
+                # bot.edit_message_text(  text="hi {} {},你已抢过红包,已获得{}个CHU币,请3小时后再来,目前红包剩余{}/20，剩余CHU币{}个".format(msg.from_user.first_name,msg.from_user.last_name,int(luckyuser['luckynum']), gqueue.qsize(), gsumleft),
+                #         chat_id=query.message.chat_id,message_id=query.message.message_id)      
+                msg.reply_text(text="hi {} {},你已抢过红包,已获得{}个CHU币,请3小时后再来,目前红包剩余{}/20，剩余CHU币{}个".format(msg.from_user.first_name,msg.from_user.last_name,int(luckyuser['luckynum']), gqueue.qsize(), gsumleft),reply_to_message_id=msg.message_id)
+
+            except Exception as e:
+                logger.error(e)
+                
+            sumqueue.put(gsumleft)
+        client.close()
+        
+    else:
+        # bot.edit_message_text(  text="hi {} {},当前不是发红包的时间，请3小时后再来".format(msg.from_user.first_name,msg.from_user.last_name),
+        #                 chat_id=msg.chat_id,message_id=msg.message_id)
+        msg.reply_text(text="hi {} {},当前不是发红包的时间，请3小时后再来".format(msg.from_user.first_name,msg.from_user.last_name),reply_to_message_id=msg.message_id)
+
 
 def checkin(bot,query):
     client = MongoClient('localhost', 27017)
@@ -189,8 +289,11 @@ def checkin(bot,query):
     if useritem == None:
 
         db.posts.insert_one({'userid':query.from_user.id,'chunum':20,'isregister':True,'isGetCHU':False})
-        bot.edit_message_text(  text="hi {} {},签到成功,已获得20个CHU币".format(query.from_user.first_name,query.from_user.last_name),
+        try:
+            bot.edit_message_text(  text="hi {} {},签到成功,已获得20个CHU币".format(query.from_user.first_name,query.from_user.last_name),
                                 chat_id=query.message.chat_id,message_id=query.message.message_id)
+        except Exception as e:
+            logger.error(e)
         # bot.send_message(text="hi {} {},签到成功,已获得20个CHU币".format(query.from_user.first_name,query.from_user.last_name),
         #     chat_id="@helloeasy") 
 
@@ -200,13 +303,19 @@ def checkin(bot,query):
         useritem['isregister'] = True
         
         db.posts.replace_one({'userid':query.from_user.id},useritem)
-        bot.edit_message_text(  text="hi {} {},签到成功,已获得20个CHU币".format(query.from_user.first_name,query.from_user.last_name),
+        try:
+            bot.edit_message_text(  text="hi {} {},签到成功,已获得20个CHU币".format(query.from_user.first_name,query.from_user.last_name),
                                 chat_id=query.message.chat_id,message_id=query.message.message_id)
+        except Exception as e:
+            logger.error(e)
         # bot.send_message(text="hi {} {},签到成功,已获得20个CHU币".format(query.from_user.first_name,query.from_user.last_name),
         #     chat_id="@helloeasy") 
     else:
-        bot.edit_message_text(  text="hi {} {},今天已签过到".format(query.from_user.first_name,query.from_user.last_name),
+        try:
+            bot.edit_message_text(  text="hi {} {},今天已签过到".format(query.from_user.first_name,query.from_user.last_name),
                                 chat_id=query.message.chat_id,message_id=query.message.message_id)
+        except Exception as e:
+            logger.error(e)
         # bot.send_message(text="hi {} {},今天已签过到".format(query.from_user.first_name,query.from_user.last_name),
         #     chat_id="@helloeasy") 
 
@@ -259,6 +368,8 @@ def generate_random_integers(_sum, n):
     return array
 
 def rundelayth(threadName, delay):
+    listforcreate = []
+    sendtext = []
     # dsp.start()
     keyboard = [[InlineKeyboardButton("抢红包", callback_data='1')],   #,InlineKeyboardButton("发红包", callback_data='2')
 
@@ -267,17 +378,29 @@ def rundelayth(threadName, delay):
             ]
     count= 0
     while True:
-        time.sleep(0.5)
+        time.sleep(0.1)
         msgobj = delayque.get()
         logger.info("************ sending the msg as slowly as possible ************ {}".format(msgobj))
-
         try:
-
+            
             if hasattr(msgobj,"quetype") and msgobj["quetype"] == "need1":
                 logger.info("i am in sending hongbao windows")
                 count += 1
+
             # if msgobj.message.text == "/CHU币" or msgobj.message.text == "/chu币":
-                msgobj.message.reply_text("需要我做什么?",reply_markup=InlineKeyboardMarkup(keyboard),reply_to_message_id=msgobj.message.message_id)
+                listforcreate.append(msgobj)
+                sendtext.append(msgobj.message.message_id)
+                print("list is %s  text id is %s" % (listforcreate,sendtext))
+
+                print("=-=-=-=-=-=-********** %s  %s" % (count,len(listforcreate)))
+                if len(listforcreate) == 10:
+                    try:
+                        logger.info("@@@@@@ ------  starting sending to the list of chat id ")
+                        msgobj.message.reply_text("需要我做什么?",reply_markup=InlineKeyboardMarkup(keyboard),reply_to_message_id=sendtext[0],reply_to_message_id=sendtext[1])
+                        # msgobj.message.reply_text("需要我做什么?",reply_markup=InlineKeyboardMarkup(keyboard),entities=sendtext)
+                        count = 0
+                    except Exception as e:
+                        print("get some error %s" % e)
 
             elif hasattr(msgobj,"quetype") and msgobj["quetype"] == "gethongbao1":
                 # update.message.reply_text("需要我做什么?",reply_markup=InlineKeyboardMarkup(keyboard))
@@ -285,14 +408,20 @@ def rundelayth(threadName, delay):
                 # bot.edit_message_text(text="hi {} {}, 抢到{}个CHU币".format(query.from_user.first_name,query.from_user.last_name,int(luckychu)),
                 #         chat_id=query.message.chat_id,message_id=query.message.message_id)
                 msgobj.message.reply_text("hi {} {}, 抢到{}个CHU币".format(query.from_user.first_name,query.from_user.last_name,int(luckychu)),
-                        reply_to_message_id=msgobj.message.message_id)    
+                        reply_to_message_id=msgobj.message.message_id)   
+            # if  count == 19:
+            #     time.sleep(40)
+            #     count = 0
         except Exception as e:
             logger.info(count)
-            logger.error(e)        
-
-
-    
-    
+            logger.error(e)
+            query = msgobj.callback_query
+            try:
+                print("starting the bot2^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+                bot2.bot.send_message(chat_id="@helloeasy", text = "hello i am a booooooooooooooooot")
+            except Exception as e:
+                 print(e)
+            time.sleep(10)        
 
 def teleupdate():
 
@@ -302,16 +431,42 @@ def teleupdate():
     import _thread
     _thread.start_new_thread(rundelayth,("Thread-1", 2, ))
 
-    command_handler = CommandHandler("CHU币",create)
+    command_create_handler = CommandHandler("CHU币",create)
+    command_handler = CommandHandler("抢红包",qianghongbao)
     command_start_handler = CommandHandler("start",start) #
     # dispatcher.add_handler(echo_handler)
     dispatcher.add_handler(command_handler)
+    dispatcher.add_handler(command_create_handler)
     dispatcher.add_handler(command_start_handler)
     dispatcher.add_handler(CallbackQueryHandler(button))
 
     updater.start_polling(bootstrap_retries = 0, clean = True)
+    # updater.start_webhook(listen='0.0.0.0',
+    #                   port=8443,
+    #                   url_path='570841543:AAGnlNIz7eTb-nmJ6QmiZ13cNVsIsGKR1HQ',
+    #                   key='private.key',
+    #                   cert='cert.pem',
+    #                   webhook_url='https://t.songbi.io:8443/570841543:AAGnlNIz7eTb-nmJ6QmiZ13cNVsIsGKR1HQ')
     updater.idle()
 
+def assistbot1():
+
+    from telegram.ext import MessageHandler,Filters,CommandHandler,CallbackQueryHandler
+    # updaterbot1 = Updater(token='624215620:AAEXzmsuETUEy8gQejUhlmzY60Yl7dCQjvo',workers=80)
+    # echo_handler = MessageHandler(Filters.text,hello)
+    # import _thread
+    # _thread.start_new_thread(rundelayth,("Thread-1", 2, ))
+
+    # command_handler = CommandHandler("CHU币",create)
+    # command_start_handler = CommandHandler("start",start) #
+    # # dispatcher.add_handler(echo_handler)
+    # dispatcher.add_handler(command_handler)
+    # dispatcher.add_handler(command_start_handler)
+    # dispatcher.add_handler(CallbackQueryHandler(button,pass_update_queue=True))
+
+    # updaterbot1.start_polling(bootstrap_retries = 0, clean = True)
+
+    # updaterbot1.idle()
 
 def timerthread():
     import threading
@@ -324,7 +479,7 @@ def testprint():
     import time
     listforgroupid = []
     while True:
-        time.sleep(300)  #LUCKYINTERVAL
+        time.sleep(60)  #LUCKYINTERVAL
 
         #updater.bot.edit_message_text(  text="hi {},今天已签过到".format(query.from_user.first_name),
         #                         chat_id=query.message.chat_id,
@@ -401,6 +556,9 @@ if __name__ == '__main__':
         
         result2 = pool.apply_async(scheduler)
         
-        result3 = pool.apply(teleupdate) 
+        # result3 = pool.apply_async(assistbot1) 
+        
+        result4 = pool.apply(teleupdate) 
+
          
         
