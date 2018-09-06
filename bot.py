@@ -39,9 +39,8 @@ from pymongo import MongoClient
 
 luckytextpre3 = "触币-基于区块链的数字资产交易平台。全民签到领CHU币活动中。\
                 每天9、12、18时准时发送红包，一共三次签到机会。签到已更新，大家快来签到吧！"
-luckytextpre = "触币-基于区块链的数字资产交易平台。全民签到领CHU币活动中（每天签到3次，9、12、18时准时更新签到）。\
-签到已更新，大家快来签到吧！"
-
+luckytextpre = "触币-基于区块链的数字资产交易平台。全民领CHU币红包活动中（每天3小时发送一大红包）。\n红包已更新，先到先得，大家快来抢红包吧。"
+qiandaotext  = "触币-基于区块链的数字资产交易平台。全民签到领CHU币活动中（每天签到3次，9、12、18时准时更新签到）。\n签到已更新，大家快来签到吧！"
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
@@ -448,6 +447,8 @@ def dailylucky():
     client = MongoClient('localhost', 27017)
     db = client.test_database
     infoitem = db.posts.update_many({"isregister":True},{'$set':{"isregister":False}})
+    while not groupinfoque.empty():
+        updater.bot.send_message(text = qiandaotext,chat_id=groupinfoque.get())
     client.close()
 
 def runtimer():
@@ -455,7 +456,7 @@ def runtimer():
 
 def scheduler():
     schedule.every().day.at("01:00").do(dailylucky)
-    schedule.every().day.at("02:12").do(dailylucky)
+    # schedule.every().day.at("02:12").do(dailylucky)
     schedule.every().day.at("04:00").do(dailylucky)
     schedule.every().day.at("07:00").do(dailylucky)
     
